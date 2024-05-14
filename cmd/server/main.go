@@ -10,12 +10,16 @@ import (
 )
 
 func main() {
-	app := internal.New()
+	app, err := internal.New()
+	if err != nil {
+		slog.Error("failed to create app", httplog.ErrAttr(err))
+		return
+	}
 
 	ctx, cancelFunc := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancelFunc()
 
-	err := app.Start(ctx)
+	err = app.Start(ctx)
 	if err != nil {
 		slog.Error("error starting", httplog.ErrAttr(err))
 	}

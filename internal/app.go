@@ -2,29 +2,43 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-chi/httplog/v2"
 	"github.com/redis/go-redis/v9"
+	"github.com/sethvargo/go-envconfig"
 	"log/slog"
 	"net/http"
 	"time"
 )
 
 type App struct {
+	Config      AppConfig
 	Router      http.Handler
 	RedisClient *redis.Client
 }
 
-func New() *App {
-	app := &App{
-		Router: loadRoutes(),
+func New() (*App, error) {
+	var config AppConfig
+	err := envconfig.Process(context.Background(), &config)
+	if err != nil {
+		slog.Error("Failed to parse environment variables", httplog.ErrAttr(err))
+		return nil, err
 	}
 
-	return app
+	app := &App{
+		Config:      config,
+		RedisClient: nil,
+	}
+
+	app.loadRoutes()
+
+	return app, nil
 }
 
 func (app *App) Start(ctx context.Context) error {
+	port := app.Config.Port
 	server := &http.Server{
-		Addr:    ":3000",
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: app.Router,
 	}
 
@@ -42,7 +56,7 @@ func (app *App) Start(ctx context.Context) error {
 		}(app.RedisClient)
 	}
 
-	slog.Info("Starting server")
+	slog.Info(fmt.Sprintf("Starting server with port %d", port))
 
 	go func(server *http.Server) {
 		err := server.ListenAndServe()

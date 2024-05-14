@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/httplog/v2 v2.0.11
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/redis/go-redis/v9 v9.5.1
+	github.com/sethvargo/go-envconfig v1.0.1
 )
 
 require (

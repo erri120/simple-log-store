@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func loadRoutes() http.Handler {
+func (app *App) loadRoutes() {
 	r := chi.NewRouter()
 
 	// https://github.com/go-chi/httplog/blob/master/options.go
@@ -36,20 +36,26 @@ func loadRoutes() http.Handler {
 	})
 
 	r.Route("/logs", func(r chi.Router) {
-		r.Post("/", uploadLogs)
+		logsHandler := &LogsHandler{
+			Config: app.Config,
+		}
+
+		r.Post("/", logsHandler.uploadLogs)
 	})
 
-	return r
+	app.Router = r
+}
+
+type LogsHandler struct {
+	Config AppConfig
 }
 
 var expectedPrefix = []byte("############ Nexus Mods App log file")
 
-func uploadLogs(w http.ResponseWriter, r *http.Request) {
-
-	// TODO: move values to config
-	const singleFileLimit int64 = 2 << 19
-	const maxFileCount int64 = 5
-	const contentLengthLimit = singleFileLimit * maxFileCount
+func (handler *LogsHandler) uploadLogs(w http.ResponseWriter, r *http.Request) {
+	singleFileLimit := handler.Config.SingleFileSizeLimit
+	maxFileCount := handler.Config.SingleFileSizeLimit
+	contentLengthLimit := singleFileLimit * maxFileCount
 
 	if r.ContentLength > contentLengthLimit {
 		http.Error(w, fmt.Sprintf("%d is over the limit of %d bytes", r.ContentLength, contentLengthLimit), http.StatusRequestEntityTooLarge)
