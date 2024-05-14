@@ -1,15 +1,22 @@
 package main
 
 import (
+	"context"
+	"github.com/go-chi/httplog/v2"
 	"log/slog"
-	"net/http"
+	"os"
+	"os/signal"
 	"simple-log-store/internal"
 )
 
 func main() {
-	slog.Info("starting")
 	app := internal.New()
 
-	err := http.ListenAndServe(":3000", app.Router)
-	slog.Error("exit", err)
+	ctx, cancelFunc := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancelFunc()
+
+	err := app.Start(ctx)
+	if err != nil {
+		slog.Error("error starting", httplog.ErrAttr(err))
+	}
 }
