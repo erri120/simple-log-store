@@ -75,6 +75,8 @@ func uploadLogs(w http.ResponseWriter, r *http.Request) {
 	buffer := make([]byte, singleFileLimit)
 	eofCheck := make([]byte, 1)
 
+	logFileIds := make([]LogFileId, maxFileCount)
+
 	for {
 		part, err := reader.NextRawPart()
 		if err != nil {
@@ -120,6 +122,32 @@ func uploadLogs(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "missing header", http.StatusUnsupportedMediaType)
 			return
 		}
+
+		logFileId, err := StoreLogFile(buffer)
+		if err != nil {
+			oplog := httplog.LogEntry(r.Context())
+			oplog.Error("failed to store log file")
+			http.Error(w, "something went wrong", http.StatusInternalServerError)
+			return
+		}
+
+		logFileIds = append(logFileIds, logFileId)
+	}
+
+	logBundleId, err := CreateLogBundle(logFileIds)
+	if err != nil {
+		oplog := httplog.LogEntry(r.Context())
+		oplog.With(slog.Any("logFileIds", logFileIds)).Error("failed to create a log bundle")
+		http.Error(w, "something went wrong", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(logBundleId.Bytes())
+	if err != nil {
+		oplog := httplog.LogEntry(r.Context())
+		oplog.Error("failed to write response", httplog.ErrAttr(err))
+		http.Error(w, "something went wrong", http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
