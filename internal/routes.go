@@ -37,7 +37,11 @@ func (app *App) loadRoutes() {
 
 	r.Route("/logs", func(r chi.Router) {
 		logsHandler := &LogsHandler{
-			Config: app.Config,
+			Config: &app.Config,
+			LogRepo: &LogRepo{
+				Config:      &app.Config,
+				RedisClient: app.RedisClient,
+			},
 		}
 
 		r.Post("/", logsHandler.uploadLogs)
@@ -47,7 +51,8 @@ func (app *App) loadRoutes() {
 }
 
 type LogsHandler struct {
-	Config AppConfig
+	Config  *AppConfig
+	LogRepo *LogRepo
 }
 
 var expectedPrefix = []byte("############ Nexus Mods App log file")
@@ -129,7 +134,7 @@ func (handler *LogsHandler) uploadLogs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		logFileId, err := StoreLogFile(buffer)
+		logFileId, err := handler.LogRepo.StoreLogFile(contentSlice)
 		if err != nil {
 			oplog := httplog.LogEntry(r.Context())
 			oplog.Error("failed to store log file")
