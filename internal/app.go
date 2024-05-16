@@ -8,6 +8,7 @@ import (
 	"github.com/sethvargo/go-envconfig"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -25,6 +26,26 @@ func New() (*App, error) {
 		return nil, err
 	}
 
+	fileInfo, err := os.Stat(config.StoragePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(config.StoragePath, 0770)
+			if err != nil {
+				slog.Error("Failed to create directory")
+				return nil, err
+			}
+		} else {
+			slog.Error("Failed to stat directory")
+			return nil, err
+		}
+	}
+
+	if fileInfo != nil {
+		if !fileInfo.IsDir() {
+			return nil, fmt.Errorf("storage path is not a directory")
+		}
+	}
+
 	opt, err := redis.ParseURL(config.RedisConnectionString)
 	if err != nil {
 		slog.Error("Failed to parse Redis URL", httplog.ErrAttr(err))
@@ -39,7 +60,6 @@ func New() (*App, error) {
 	}
 
 	app.loadRoutes()
-
 	return app, nil
 }
 
