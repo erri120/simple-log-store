@@ -25,9 +25,17 @@ func New() (*App, error) {
 		return nil, err
 	}
 
+	opt, err := redis.ParseURL(config.RedisConnectionString)
+	if err != nil {
+		slog.Error("Failed to parse Redis URL", httplog.ErrAttr(err))
+		return nil, err
+	}
+
+	redisClient := redis.NewClient(opt)
+
 	app := &App{
 		Config:      config,
-		RedisClient: nil,
+		RedisClient: redisClient,
 	}
 
 	app.loadRoutes()
@@ -42,19 +50,17 @@ func (app *App) Start(ctx context.Context) error {
 		Handler: app.Router,
 	}
 
-	if app.RedisClient != nil {
-		err := app.RedisClient.Ping(ctx).Err()
-		if err != nil {
-			slog.Error("failed to connect to redis", httplog.ErrAttr(err))
-			return err
-		}
-
-		defer func(redisClient *redis.Client) {
-			if err := redisClient.Close(); err != nil {
-				slog.Error("failed to close redis client", httplog.ErrAttr(err))
-			}
-		}(app.RedisClient)
+	err := app.RedisClient.Ping(ctx).Err()
+	if err != nil {
+		slog.Error("failed to connect to redis", httplog.ErrAttr(err))
+		return err
 	}
+
+	defer func(redisClient *redis.Client) {
+		if err := redisClient.Close(); err != nil {
+			slog.Error("failed to close redis client", httplog.ErrAttr(err))
+		}
+	}(app.RedisClient)
 
 	slog.Info(fmt.Sprintf("Starting server with port %d", port))
 
