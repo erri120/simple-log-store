@@ -9,6 +9,15 @@ type LogFileId = ulid.ULID
 
 type LogBundleId = ulid.ULID
 
+func ParseId(input string) (ulid.ULID, error) {
+	var id ulid.ULID
+	if err := id.UnmarshalText([]byte(input)); err != nil {
+		return id, fmt.Errorf("failed to unmarshal input: %w", err)
+	}
+
+	return id, nil
+}
+
 func EncodeIds(logFileIds []LogFileId) (string, error) {
 	if len(logFileIds) < 1 {
 		return "", fmt.Errorf("input must have at least one ID")

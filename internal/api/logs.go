@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/httplog/v2"
 	"github.com/oklog/ulid/v2"
 	"io"
+	"log/slog"
 	"net/http"
 	"simple-log-store/internal/config"
 	"simple-log-store/internal/logs"
@@ -37,6 +38,16 @@ func registerLogsHandler(r chi.Router, appConfig *config.AppConfig, storageServi
 
 	r.Route("/logs", func(r chi.Router) {
 		r.Post("/", h.post)
+
+		r.Route("/file/{logFileId}", func(r chi.Router) {
+			r.Use(h.idCtx)
+			r.Get("/", h.getFile)
+		})
+
+		r.Route("/bundle/{logBundleId}", func(r chi.Router) {
+			r.Use(h.idCtx)
+			r.Get("/", h.getBundle)
+		})
 	})
 }
 
@@ -130,5 +141,45 @@ func (h *logsHandler) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *logsHandler) idCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var idInput string
+
+		if logFileIdParam := chi.URLParam(r, "logFileId"); logFileIdParam != "" {
+			idInput = logFileIdParam
+		} else if logBundleIdParam := chi.URLParam(r, "logBundleId"); logBundleIdParam != "" {
+			idInput = logBundleIdParam
+		} else {
+			http.NotFound(w, r)
+			return
+		}
+
+		id, err := logs.ParseId(idInput)
+		if err != nil {
+			oplog := httplog.LogEntry(r.Context())
+			oplog.Error("failed to parse id", slog.String("input", idInput))
+			http.NotFound(w, r)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "id", id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (h *logsHandler) getFile(w http.ResponseWriter, r *http.Request) {
+	logFileId := r.Context().Value("id").(logs.LogFileId)
+
+	_, _ = w.Write(logFileId.Bytes())
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *logsHandler) getBundle(w http.ResponseWriter, r *http.Request) {
+	logBundleId := r.Context().Value("id").(logs.LogBundleId)
+
+	_, _ = w.Write(logBundleId.Bytes())
 	w.WriteHeader(http.StatusOK)
 }
