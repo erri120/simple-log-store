@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/go-chi/httplog/v2"
 	"log/slog"
 	"os"
 	"os/signal"
 	"simple-log-store/internal"
+	"simple-log-store/internal/utils"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 
 	app, err := internal.New(defaultLogger, defaultWriter)
 	if err != nil {
-		slog.Error("failed to create app", httplog.ErrAttr(err))
+		slog.Error("failed to create app", utils.ErrAttr(err))
 		return
 	}
 
@@ -25,6 +25,6 @@ func main() {
 
 	err = app.Start(ctx)
 	if err != nil {
-		slog.Error("error starting", httplog.ErrAttr(err))
+		slog.Error("error starting", utils.ErrAttr(err))
 	}
 }
