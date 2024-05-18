@@ -10,11 +10,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"simple-log-store/internal/config"
 	"simple-log-store/internal/logs"
 	"simple-log-store/internal/redis"
 	"simple-log-store/internal/storage"
 	"simple-log-store/internal/utils"
+	"time"
 )
 
 // Handler for the `/logs` endpoint.
@@ -173,12 +175,32 @@ func (h *logsHandler) idCtx(next http.Handler) http.Handler {
 func (h *logsHandler) getFile(w http.ResponseWriter, r *http.Request) {
 	logFileId := r.Context().Value("id").(logs.LogFileId)
 
-	_, _ = w.Write(logFileId.Bytes())
-	w.WriteHeader(http.StatusOK)
+	// TODO: check with Redis
+
+	file, err := h.storageService.OpenLogFile(logFileId)
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+
+		writeInternalServerError(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(w, r, logFileId.String(), time.UnixMilli(0), file)
 }
 
 func (h *logsHandler) getBundle(w http.ResponseWriter, r *http.Request) {
 	logBundleId := r.Context().Value("id").(logs.LogBundleId)
+
+	// TODO: fetch bundle
 
 	_, _ = w.Write(logBundleId.Bytes())
 	w.WriteHeader(http.StatusOK)

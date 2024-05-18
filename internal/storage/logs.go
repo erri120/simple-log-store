@@ -87,3 +87,17 @@ func (s *Service) StageLogFile(id logs.LogFileId, reader io.Reader, maxFileSize 
 	logger.Info("successfully staged log file", slog.Int64("bytes", n))
 	return nil
 }
+
+func (s *Service) OpenLogFile(logFileId logs.LogFileId) (*os.File, error) {
+	// TODO: use storage path instead of staging
+	logFilePath := s.getStagingPath(logFileId)
+
+	file, err := os.Open(logFilePath)
+
+	if err != nil {
+		s.logger.Error("failed to open log file for reading", utils.ErrAttr(err))
+		return nil, err
+	}
+
+	return file, nil
+}
