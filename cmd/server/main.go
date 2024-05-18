@@ -10,7 +10,11 @@ import (
 )
 
 func main() {
-	app, err := internal.New()
+	defaultWriter := os.Stdout
+	defaultLogger := slog.New(slog.NewJSONHandler(defaultWriter, nil)).With(slog.String("service", "app"))
+	slog.SetDefault(defaultLogger)
+
+	app, err := internal.New(defaultLogger, defaultWriter)
 	if err != nil {
 		slog.Error("failed to create app", httplog.ErrAttr(err))
 		return

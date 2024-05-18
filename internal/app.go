@@ -2,64 +2,56 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/go-chi/httplog/v2"
-	"github.com/redis/go-redis/v9"
 	"github.com/sethvargo/go-envconfig"
+	"io"
 	"log/slog"
 	"net/http"
-	"os"
+	"simple-log-store/internal/api"
+	"simple-log-store/internal/config"
+	"simple-log-store/internal/redis"
+	"simple-log-store/internal/storage"
+	"simple-log-store/internal/utils"
 	"time"
 )
 
 type App struct {
-	Config      AppConfig
-	Router      http.Handler
-	RedisClient *redis.Client
+	Logger *slog.Logger
+
+	Config         *config.AppConfig
+	StorageService *storage.Service
+	RedisService   *redis.Service
+	ApiService     *api.Service
 }
 
-func New() (*App, error) {
-	var config AppConfig
-	err := envconfig.Process(context.Background(), &config)
+func New(logger *slog.Logger, logWriter io.Writer) (*App, error) {
+	var appConfig config.AppConfig
+	err := envconfig.Process(context.Background(), &appConfig)
 	if err != nil {
-		slog.Error("Failed to parse environment variables", httplog.ErrAttr(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to parse environment variables: %w", err)
 	}
 
-	fileInfo, err := os.Stat(config.StoragePath)
+	storageService, err := storage.CreateService(&appConfig, logger)
 	if err != nil {
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(config.StoragePath, 0770)
-			if err != nil {
-				slog.Error("Failed to create directory")
-				return nil, err
-			}
-		} else {
-			slog.Error("Failed to stat directory")
-			return nil, err
-		}
+		return nil, fmt.Errorf("failed to create storage service: %w", err)
 	}
 
-	if fileInfo != nil {
-		if !fileInfo.IsDir() {
-			return nil, fmt.Errorf("storage path is not a directory")
-		}
-	}
-
-	opt, err := redis.ParseURL(config.RedisConnectionString)
+	redisService, err := redis.CreateService(&appConfig, logger)
 	if err != nil {
-		slog.Error("Failed to parse Redis URL", httplog.ErrAttr(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to create redis service: %w", err)
 	}
 
-	redisClient := redis.NewClient(opt)
+	apiService := api.CreateService(&appConfig, storageService, logWriter)
 
 	app := &App{
-		Config:      config,
-		RedisClient: redisClient,
+		Logger:         logger,
+		Config:         &appConfig,
+		StorageService: storageService,
+		RedisService:   redisService,
+		ApiService:     apiService,
 	}
 
-	app.loadRoutes()
 	return app, nil
 }
 
@@ -67,32 +59,34 @@ func (app *App) Start(ctx context.Context) error {
 	port := app.Config.Port
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: app.Router,
+		Handler: app.ApiService.Handler,
 	}
 
-	err := app.RedisClient.Ping(ctx).Err()
-	if err != nil {
-		slog.Error("failed to connect to redis", httplog.ErrAttr(err))
+	if err := app.RedisService.Ping(); err != nil {
 		return err
 	}
 
-	defer func(redisClient *redis.Client) {
-		if err := redisClient.Close(); err != nil {
-			slog.Error("failed to close redis client", httplog.ErrAttr(err))
-		}
-	}(app.RedisClient)
+	defer func(redisService *redis.Service) {
+		redisService.Close()
+	}(app.RedisService)
 
-	slog.Info(fmt.Sprintf("Starting server with port %d", port))
+	app.Logger.Info("starting server", slog.Uint64("port", uint64(port)))
 
-	go func(server *http.Server) {
+	go func(server *http.Server, logger *slog.Logger) {
 		err := server.ListenAndServe()
 		if err != nil {
-			slog.Error("failed to start server", httplog.ErrAttr(err))
+			if errors.Is(err, http.ErrServerClosed) {
+				logger.Info("server closed")
+			} else {
+				slog.Error("server shutdown unexpectedly", utils.ErrAttr(err))
+			}
 		}
-	}(server)
+	}(server, app.Logger)
 
 	select {
 	case <-ctx.Done():
+		app.Logger.Info("shutting down server")
+
 		timeout, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
