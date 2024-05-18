@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"simple-log-store/internal/config"
 	"simple-log-store/internal/logs"
+	"simple-log-store/internal/redis"
 	"simple-log-store/internal/storage"
 	"simple-log-store/internal/utils"
 )
@@ -20,15 +22,17 @@ type logsHandler struct {
 	maxFileCount       uint16
 	contentLengthLimit uint64
 
-	storage *storage.Service
+	storageService *storage.Service
+	redisService   *redis.Service
 }
 
-func registerLogsHandler(r chi.Router, appConfig *config.AppConfig, storage *storage.Service) {
+func registerLogsHandler(r chi.Router, appConfig *config.AppConfig, storageService *storage.Service, redisService *redis.Service) {
 	h := &logsHandler{
 		singleFileLimit:    appConfig.SingleFileSizeLimit,
 		maxFileCount:       appConfig.MaxFileCount,
 		contentLengthLimit: appConfig.SingleFileSizeLimit * uint64(appConfig.MaxFileCount),
-		storage:            storage,
+		storageService:     storageService,
+		redisService:       redisService,
 	}
 
 	r.Route("/logs", func(r chi.Router) {
@@ -74,7 +78,7 @@ func (h *logsHandler) post(w http.ResponseWriter, r *http.Request) {
 
 			oplog := httplog.LogEntry(r.Context())
 			oplog.Error("unexpected error, expected EOF", utils.ErrAttr(err))
-			http.Error(w, "something went wrong", http.StatusInternalServerError)
+			writeInternalServerError(w)
 			return
 		}
 
@@ -82,7 +86,7 @@ func (h *logsHandler) post(w http.ResponseWriter, r *http.Request) {
 		logFileIds[fileCount] = logFileId
 		fileCount += 1
 
-		err = h.storage.StageLogFile(logFileId, part, h.singleFileLimit)
+		err = h.storageService.StageLogFile(logFileId, part, h.singleFileLimit)
 		if err != nil {
 			var fileTooLarge storage.FileTooLarge
 			if errors.As(err, &fileTooLarge) {
@@ -91,14 +95,40 @@ func (h *logsHandler) post(w http.ResponseWriter, r *http.Request) {
 			} else {
 				oplog := httplog.LogEntry(r.Context())
 				oplog.Error("unexpected error", utils.ErrAttr(err))
-				http.Error(w, "something went wrong", http.StatusInternalServerError)
+				writeInternalServerError(w)
 				return
 			}
+		}
+
+		err = h.redisService.StageLogFile(context.Background(), logFileId)
+		if err != nil {
+			writeInternalServerError(w)
+			return
 		}
 	}
 
 	logFileIds = logFileIds[:fileCount]
-	// TODO: make log bundle
+	logBundleId, err := h.redisService.CreateLogBundle(context.Background(), logFileIds)
+	if err != nil {
+		writeInternalServerError(w)
+		return
+	}
+
+	idString, err := logBundleId.MarshalText()
+	if err != nil {
+		oplog := httplog.LogEntry(r.Context())
+		oplog.Error("unexpected error marshaling id to text", utils.ErrAttr(err))
+		writeInternalServerError(w)
+		return
+	}
+
+	_, err = w.Write(idString)
+	if err != nil {
+		oplog := httplog.LogEntry(r.Context())
+		oplog.Error("unexpected error writing output", utils.ErrAttr(err))
+		writeInternalServerError(w)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

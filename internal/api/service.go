@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"simple-log-store/internal/config"
+	"simple-log-store/internal/redis"
 	"simple-log-store/internal/storage"
 	"time"
 )
@@ -16,7 +17,7 @@ type Service struct {
 	Handler http.Handler
 }
 
-func CreateService(appConfig *config.AppConfig, storage *storage.Service, logWriter io.Writer) *Service {
+func CreateService(appConfig *config.AppConfig, storageService *storage.Service, redisService *redis.Service, logWriter io.Writer) *Service {
 	r := chi.NewRouter()
 	service := &Service{
 		Handler: r,
@@ -44,7 +45,7 @@ func CreateService(appConfig *config.AppConfig, storage *storage.Service, logWri
 		http.NotFound(w, r)
 	})
 
-	registerLogsHandler(r, appConfig, storage)
+	registerLogsHandler(r, appConfig, storageService, redisService)
 
 	return service
 }

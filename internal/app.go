@@ -42,7 +42,7 @@ func New(logger *slog.Logger, logWriter io.Writer) (*App, error) {
 		return nil, fmt.Errorf("failed to create redis service: %w", err)
 	}
 
-	apiService := api.CreateService(&appConfig, storageService, logWriter)
+	apiService := api.CreateService(&appConfig, storageService, redisService, logWriter)
 
 	app := &App{
 		Logger:         logger,
