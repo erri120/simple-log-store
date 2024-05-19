@@ -46,6 +46,7 @@ func CreateService(appConfig *config.AppConfig, storageService *storage.Service,
 	})
 
 	registerLogsHandler(r, appConfig, storageService, redisService)
+	registerFrontendHandler(r, storageService, redisService)
 
 	return service
 }

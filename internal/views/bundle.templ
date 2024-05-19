@@ -1,0 +1,29 @@
+package views
+
+import (
+	"fmt"
+	"simple-log-store/internal/logs"
+)
+
+templ NotFound(logBundleId logs.LogBundleId) {
+	<div>404 - not found: { logBundleId.String() }</div>
+}
+
+func getViewLink(logFileId logs.LogFileId) string {
+	return fmt.Sprintf("/logs/file/%s", logFileId.String())
+}
+
+templ Bundle(logBundleId logs.LogBundleId, logFileIds []logs.LogFileId) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<title>Logs - { logBundleId.String() }</title>
+			<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+		</head>
+		<body>
+			for _, logFileId := range logFileIds {
+				<pre hx-get={ getViewLink(logFileId) } hx-trigger="revealed" hx-swap="innerHTML"></pre>
+			}
+		</body>
+	</html>
+}

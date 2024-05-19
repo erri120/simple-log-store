@@ -3,6 +3,7 @@ module simple-log-store
 go 1.22
 
 require (
+	github.com/a-h/templ v0.2.680
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/go-chi/httplog/v2 v2.0.11
 	github.com/oklog/ulid/v2 v2.1.0

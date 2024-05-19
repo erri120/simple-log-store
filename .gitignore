@@ -4,3 +4,5 @@ data
 
 storage
 staging
+
+*_templ.go
