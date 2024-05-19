@@ -201,7 +201,7 @@ func (h *logsHandler) getFile(w http.ResponseWriter, r *http.Request) {
 func (h *logsHandler) getBundle(w http.ResponseWriter, r *http.Request) {
 	logBundleId := r.Context().Value("id").(logs.LogBundleId)
 
-	logFileIds, err := h.redisService.GetLogBundle(context.Background(), logBundleId)
+	logFileIds, err := h.redisService.GetLogBundle(r.Context(), logBundleId)
 	if err != nil {
 		if errors.Is(err, redis.ErrNotFound) {
 			http.NotFound(w, r)
