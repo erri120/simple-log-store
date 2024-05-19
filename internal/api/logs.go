@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
@@ -175,7 +176,7 @@ func (h *logsHandler) idCtx(next http.Handler) http.Handler {
 func (h *logsHandler) getFile(w http.ResponseWriter, r *http.Request) {
 	logFileId := r.Context().Value("id").(logs.LogFileId)
 
-	// TODO: check with Redis
+	// TODO: check with redis?
 
 	file, err := h.storageService.OpenLogFile(logFileId)
 	defer func(file *os.File) {
@@ -200,8 +201,28 @@ func (h *logsHandler) getFile(w http.ResponseWriter, r *http.Request) {
 func (h *logsHandler) getBundle(w http.ResponseWriter, r *http.Request) {
 	logBundleId := r.Context().Value("id").(logs.LogBundleId)
 
-	// TODO: fetch bundle
+	logFileIds, err := h.redisService.GetLogBundle(context.Background(), logBundleId)
+	if err != nil {
+		if errors.Is(err, redis.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 
-	_, _ = w.Write(logBundleId.Bytes())
+		oplog := httplog.LogEntry(r.Context())
+		oplog.Error("unexpected error while getting log bundle from redis", slog.String("logBundleId", logBundleId.String()), utils.ErrAttr(err))
+		writeInternalServerError(w)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(logFileIds)
+	if err != nil {
+		oplog := httplog.LogEntry(r.Context())
+		oplog.Error("unexpected error while marshaling log file IDs of log bundle", slog.String("logBundleId", logBundleId.String()), utils.ErrAttr(err))
+		writeInternalServerError(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(jsonBytes)
 	w.WriteHeader(http.StatusOK)
 }

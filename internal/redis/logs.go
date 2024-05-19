@@ -2,7 +2,10 @@ package redis
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/oklog/ulid/v2"
+	"github.com/redis/go-redis/v9"
 	"simple-log-store/internal/logs"
 	"simple-log-store/internal/utils"
 	"time"
@@ -39,4 +42,25 @@ func (s *Service) CreateLogBundle(ctx context.Context, logFileIds []logs.LogFile
 	}
 
 	return bundleId, nil
+}
+
+var ErrNotFound = errors.New("item not found")
+
+func (s *Service) GetLogBundle(ctx context.Context, logBundleId logs.LogBundleId) ([]logs.LogFileId, error) {
+	cmd := s.client.Get(ctx, fmt.Sprintf("%s:%s", logBundlesNamespace, logBundleId.String()))
+	bytes, err := cmd.Bytes()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, fmt.Errorf("unable to find log bundle with ID `%s`: %w", logBundleId.String(), ErrNotFound)
+		}
+
+		return nil, fmt.Errorf("failed to get bytes for log bundle with ID `%s`: `%w`", logBundleId.String(), err)
+	}
+
+	logFileIds, err := logs.DecodeIds(bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode log file IDs for bundle `%s`: `%w`", logBundleId.String(), err)
+	}
+
+	return logFileIds, nil
 }
