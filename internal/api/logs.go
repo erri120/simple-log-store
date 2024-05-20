@@ -128,6 +128,12 @@ func (h *logsHandler) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = h.storageService.StoreLogFiles(logFileIds)
+	if err != nil {
+		writeInternalServerError(w)
+		return
+	}
+
 	idString, err := logBundleId.MarshalText()
 	if err != nil {
 		oplog := httplog.LogEntry(r.Context())

@@ -7,6 +7,7 @@ type AppConfig struct {
 
 	SingleFileSizeLimit uint64 `env:"SINGLE_FILE_SIZE_LIMIT, default=1048576"`
 	MaxFileCount        uint16 `env:"MAX_FILE_COUNT_PER_BUNDLE, default=5"`
+	UseHardlinks        bool   `env:"USE_HARDLINKS, required"`
 
 	StagingPath string `env:"STAGING_PATH, required"`
 	StoragePath string `env:"STORAGE_PATH, required"`

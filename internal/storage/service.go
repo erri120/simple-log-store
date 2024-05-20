@@ -9,8 +9,9 @@ import (
 type Service struct {
 	logger *slog.Logger
 
-	stagingPath string
-	storagePath string
+	stagingPath  string
+	storagePath  string
+	moveFileFunc moveFileFunc
 
 	directoryPermissions fs.FileMode
 	filePermissions      fs.FileMode
@@ -26,6 +27,12 @@ func CreateService(appConfig *config.AppConfig, logger *slog.Logger) (*Service, 
 		storagePath:          appConfig.StoragePath,
 		directoryPermissions: fixPermissions(appConfig.DirectoryPermissions, defaultDirectoryPermissions),
 		filePermissions:      fixPermissions(appConfig.FilePermissions, defaultFilePermissions),
+	}
+
+	if appConfig.UseHardlinks {
+		service.moveFileFunc = service.hardlinkFile
+	} else {
+		service.moveFileFunc = service.copyFile
 	}
 
 	if err := service.init(); err != nil {

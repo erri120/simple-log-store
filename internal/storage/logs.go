@@ -88,9 +88,22 @@ func (s *Service) StageLogFile(id logs.LogFileId, reader io.Reader, maxFileSize 
 	return nil
 }
 
+func (s *Service) StoreLogFiles(logFileIds []logs.LogFileId) error {
+	for _, logFileId := range logFileIds {
+		stagingPath := s.getStagingPath(logFileId)
+		storagePath := s.getStoragePath(logFileId)
+
+		if err := s.moveFileFunc(stagingPath, storagePath); err != nil {
+			s.logger.Error("failed to store log file", slog.String("stagingPath", stagingPath), slog.String("storagePath", storagePath), utils.ErrAttr(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *Service) OpenLogFile(logFileId logs.LogFileId) (*os.File, error) {
-	// TODO: use storage path instead of staging
-	logFilePath := s.getStagingPath(logFileId)
+	logFilePath := s.getStoragePath(logFileId)
 
 	file, err := os.Open(logFilePath)
 
