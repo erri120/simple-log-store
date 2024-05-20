@@ -32,6 +32,11 @@ func (s *Service) createDirectory(directoryPath string) error {
 
 type moveFileFunc func(string, string) error
 
+func noMove(_ string, _ string) error {
+	// NOTE(erri120): noop when from and to are the same
+	return nil
+}
+
 func (s *Service) hardlinkFile(from string, to string) error {
 	if err := os.Link(from, to); err != nil {
 		return fmt.Errorf("failed to create a hardlink from `%s` to `%s`: %w", from, to, err)

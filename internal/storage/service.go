@@ -29,10 +29,14 @@ func CreateService(appConfig *config.AppConfig, logger *slog.Logger) (*Service, 
 		filePermissions:      fixPermissions(appConfig.FilePermissions, defaultFilePermissions),
 	}
 
-	if appConfig.UseHardlinks {
-		service.moveFileFunc = service.hardlinkFile
+	if service.stagingPath == service.storagePath {
+		service.moveFileFunc = noMove
 	} else {
-		service.moveFileFunc = service.copyFile
+		if appConfig.UseHardlinks {
+			service.moveFileFunc = service.hardlinkFile
+		} else {
+			service.moveFileFunc = service.copyFile
+		}
 	}
 
 	if err := service.init(); err != nil {
