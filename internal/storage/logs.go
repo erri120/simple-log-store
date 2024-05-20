@@ -127,6 +127,11 @@ func (s *Service) DeleteLogFile(logFileId logs.LogFileId) error {
 func (s *Service) RemoveOldLogFiles(before time.Time) error {
 	directoryPath := s.storagePath
 
+	s.logger.Info("begin removing old log files")
+	defer func(logger *slog.Logger) {
+		logger.Info("finished removing old log files")
+	}(s.logger)
+
 	directoryEntries, err := os.ReadDir(directoryPath)
 	if err != nil {
 		s.logger.Error("error while reading directory", slog.String("directoryPath", directoryPath), utils.ErrAttr(err))

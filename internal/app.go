@@ -83,6 +83,24 @@ func (app *App) Start(ctx context.Context) error {
 		}
 	}(server, app.Logger)
 
+	cleanupInterval := app.Config.CleanupInterval
+	app.Logger.Info("starting cleanup goroutine", slog.Duration("cleanupInterval", cleanupInterval))
+
+	go func(ctx context.Context, storageService *storage.Service, interval time.Duration, retentionDuration time.Duration) {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				before := time.Now().Add(-retentionDuration)
+				_ = storageService.RemoveOldLogFiles(before)
+			}
+		}
+	}(ctx, app.StorageService, cleanupInterval, app.Config.LogRetentionDuration)
+
 	select {
 	case <-ctx.Done():
 		app.Logger.Info("shutting down server")

@@ -13,7 +13,8 @@ import (
 type Service struct {
 	logger *slog.Logger
 
-	client *redis.Client
+	client               *redis.Client
+	logRetentionDuration time.Duration
 }
 
 func CreateService(appConfig *config.AppConfig, logger *slog.Logger) (*Service, error) {
@@ -25,8 +26,9 @@ func CreateService(appConfig *config.AppConfig, logger *slog.Logger) (*Service, 
 	redisClient := redis.NewClient(opt)
 
 	service := &Service{
-		logger: logger.With(slog.String("service", "redis")),
-		client: redisClient,
+		logger:               logger.With(slog.String("service", "redis")),
+		client:               redisClient,
+		logRetentionDuration: appConfig.LogRetentionDuration,
 	}
 
 	return service, nil
