@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"simple-log-store/internal/logs"
 	"simple-log-store/internal/utils"
+	"time"
 )
 
 func (s *Service) getStagingPath(id logs.LogFileId) string {
@@ -88,18 +89,15 @@ func (s *Service) StageLogFile(id logs.LogFileId, reader io.Reader, maxFileSize 
 	return nil
 }
 
-func (s *Service) StoreLogFiles(logFileIds []logs.LogFileId) error {
+func (s *Service) StoreLogFiles(logFileIds []logs.LogFileId) {
 	for _, logFileId := range logFileIds {
 		stagingPath := s.getStagingPath(logFileId)
 		storagePath := s.getStoragePath(logFileId)
 
 		if err := s.moveFileFunc(stagingPath, storagePath); err != nil {
 			s.logger.Error("failed to store log file", slog.String("stagingPath", stagingPath), slog.String("storagePath", storagePath), utils.ErrAttr(err))
-			return err
 		}
 	}
-
-	return nil
 }
 
 func (s *Service) OpenLogFile(logFileId logs.LogFileId) (*os.File, error) {
@@ -108,9 +106,54 @@ func (s *Service) OpenLogFile(logFileId logs.LogFileId) (*os.File, error) {
 	file, err := os.Open(logFilePath)
 
 	if err != nil {
-		s.logger.Error("failed to open log file for reading", utils.ErrAttr(err))
+		s.logger.Error("failed to open log file for reading", slog.String("logFilePath", logFilePath), utils.ErrAttr(err))
 		return nil, err
 	}
 
 	return file, nil
+}
+
+func (s *Service) DeleteLogFile(logFileId logs.LogFileId) error {
+	logFilePath := s.getStoragePath(logFileId)
+
+	if err := os.Remove(logFilePath); err != nil {
+		s.logger.Error("failed to remove log file", slog.String("logFilePath", logFilePath), utils.ErrAttr(err))
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) RemoveOldLogFiles(before time.Time) error {
+	directoryPath := s.storagePath
+
+	directoryEntries, err := os.ReadDir(directoryPath)
+	if err != nil {
+		s.logger.Error("error while reading directory", slog.String("directoryPath", directoryPath), utils.ErrAttr(err))
+		if len(directoryEntries) == 0 {
+			return err
+		}
+	}
+
+	for _, directoryEntry := range directoryEntries {
+		filePath := filepath.Join(directoryPath, directoryEntry.Name())
+		fileInfo, err := directoryEntry.Info()
+		if err != nil {
+			s.logger.Error("failed to get info of file", slog.String("filePath", filePath), utils.ErrAttr(err))
+			continue
+		}
+
+		modificationTime := fileInfo.ModTime()
+		if !modificationTime.Before(before) {
+			continue
+		}
+
+		s.logger.Info("removing old log file", slog.String("filePath", filePath))
+		if err := os.Remove(filePath); err != nil {
+			s.logger.Error("failed to remove old log file", slog.String("filePath", filePath), utils.ErrAttr(err))
+			continue
+		}
+	}
+
+	return nil
 }

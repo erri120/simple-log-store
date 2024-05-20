@@ -128,11 +128,9 @@ func (h *logsHandler) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.storageService.StoreLogFiles(logFileIds)
-	if err != nil {
-		writeInternalServerError(w)
-		return
-	}
+	go func(storageService *storage.Service, logFileIds []logs.LogFileId) {
+		storageService.StoreLogFiles(logFileIds)
+	}(h.storageService, logFileIds)
 
 	idString, err := logBundleId.MarshalText()
 	if err != nil {
